@@ -1,3 +1,54 @@
+# Jersey Stall Manager
+
+Small Flask app for recording jersey sales. This README covers running locally, using Docker, and a quick note about deploying to Render.
+
+## Required environment variables
+- `SHEET_KEY` - Google sheet ID used by the app.
+- `GOOGLE_CREDS_PATH` - path to `credentials.json` (if mounting a file).
+- `GOOGLE_CREDS_JSON` - alternatively, the full JSON content of the Google service account credentials (preferred for some hosts). If set, the app writes it to `credentials.json` at startup.
+- `FLASK_SECRET` - Flask secret key.
+
+> Do NOT commit your `credentials.json` or any secrets to git.
+
+## Run locally (quick)
+1. Create a Python virtualenv and install deps:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+2. Export environment variables and run with gunicorn:
+```bash
+export SHEET_KEY="your_sheet_key"
+export GOOGLE_CREDS_PATH="/path/to/credentials.json"
+export FLASK_SECRET="some-secret"
+gunicorn --bind 0.0.0.0:8000 --workers 3 app:app
+```
+
+## Run with Docker
+Build and run (mount `credentials.json` into the container):
+```bash
+docker build -t jersey-app:latest .
+docker run --rm -p 8080:8080 \
+  -e SHEET_KEY=your_sheet_key \
+  -e FLASK_SECRET=your_secret \
+  -e GOOGLE_CREDS_PATH=/app/credentials.json \
+  -v /local/path/credentials.json:/app/credentials.json \
+  jersey-app:latest
+```
+
+If your platform doesn't allow mounting files, set the `GOOGLE_CREDS_JSON` env var to the JSON contents of the credentials; the app will write it to `credentials.json` on startup.
+
+## Deploy to Render (quick)
+- Push repo to GitHub and create a new Web Service on Render.
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn --bind 0.0.0.0:$PORT --workers 3 app:app`
+- Add env vars in Render: `SHEET_KEY`, `FLASK_SECRET`. For credentials either upload the file or set `GOOGLE_CREDS_JSON` (secret) containing the JSON.
+
+## Security
+- Keep `credentials.json` and any environment secrets out of git. Use the platform's secret store.
+
+If you'd like, I can add a Dockerfile and Procfile to the repo next.
 # 🏟️ Jersey Stall Manager
 
 Inventory & Sales Manager built with Flask + Google Sheets

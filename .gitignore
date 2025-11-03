@@ -1,3 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# Env / credentials
+.env
+credentials.json
+
+# VSCode
+.vscode/
 .env
 __pycache__/
 .venv
