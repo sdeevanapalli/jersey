@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Dashboard</h1>
+  <div class="row">
+    <div class="col-md-4">
+      <div class="card mb-3"><div class="card-body"><h5>Total revenue</h5><p>&#8377; {{ total_revenue }}</p></div></div>
+      <div class="card mb-3"><div class="card-body"><h5>Total sales</h5><p>{{ total_sales }}</p></div></div>
+      <div class="card mb-3"><div class="card-body"><h5>Top item</h5><p>{{ top_item or 'N/A' }}</p></div></div>
+      <div class="card mb-3"><div class="card-body"><h5>Top buyer</h5><p>{{ top_buyer or 'N/A' }}</p></div></div>
+    </div>
+    <div class="col-md-8">
+      <div class="card mb-3"><div class="card-body">{{ revenue_chart|safe }}</div></div>
+      <div class="card"><div class="card-body"><h5>Low stock</h5>
+        <ul>
+          {% for it in low_stock %}
+            <li>{{ it.Team }} - {{ it.Kit }} ({{ it.Size }}): {{ it.Qty }}</li>
+          {% else %}
+            <li>No low stock items</li>
+          {% endfor %}
+        </ul>
+      </div></div>
+    </div>
+  </div>
+{% endblock %}

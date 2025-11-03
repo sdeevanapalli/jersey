@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Record Sale</h1>
+  <form method="post">
+    <div id="items">
+      <div class="row mb-2 sale-line">
+        <div class="col-md-2"><select name="team[]" class="form-select">
+          {% for t in teams %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select></div>
+        <div class="col-md-3"><select name="kit[]" class="form-select">
+          {% for k in kits %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+        </select></div>
+        <div class="col-md-1"><select name="size[]" class="form-select">
+          {% for s in sizes %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select></div>
+        <div class="col-md-1"><input type="number" name="quantity[]" class="form-control" value="1"></div>
+        <div class="col-md-2"><input type="text" name="sold_price[]" class="form-control" placeholder="Sold price"></div>
+        <div class="col-md-2"><button type="button" class="btn btn-danger remove-line">Remove</button></div>
+      </div>
+    </div>
+    <p><button id="add-line" type="button" class="btn btn-secondary">Add Item</button></p>
+    <div class="row mb-3">
+      <div class="col-md-4"><input name="buyer" class="form-control" placeholder="Buyer name"></div>
+      <div class="col-md-2"><input name="discount" class="form-control" placeholder="Discount"></div>
+      <div class="col-md-2"><input name="deal_type" class="form-control" placeholder="Deal type"></div>
+    </div>
+    <button class="btn btn-primary" data-loading="Recording sale...">Record Sale</button>
+  </form>
+{% endblock %}

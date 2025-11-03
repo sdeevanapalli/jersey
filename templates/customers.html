@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Customers</h1>
+  <table class="table">
+    <thead>
+      <tr>
+        {% for c in columns %}<th>{{ c }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in customers %}
+        <tr>
+          {% for c in columns %}
+            <td>{{ r.get(c) }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

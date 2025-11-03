@@ -1,0 +1,10 @@
+# Requirements for Jersey Stall Manager
+flask
+pandas
+gspread
+oauth2client
+plotly
+altair
+numpy
+requests
+gunicorn

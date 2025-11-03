@@ -1,0 +1,244 @@
+from flask import Flask, render_template, request, redirect, url_for, flash, Response
+import os
+import io
+import pandas as pd
+from datetime import datetime
+from gsheet import GSheetClient
+import plotly.express as px
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# If the deployment platform doesn't support uploading files, allow the
+# full Google credentials JSON to be provided via the `GOOGLE_CREDS_JSON`
+# environment variable. On startup we write it to `credentials.json` and
+# set `GOOGLE_CREDS_PATH` so existing code can find it.
+creds_json = os.environ.get('GOOGLE_CREDS_JSON')
+if creds_json and not os.path.exists('credentials.json'):
+    with open('credentials.json', 'w') as f:
+        f.write(creds_json)
+    os.environ['GOOGLE_CREDS_PATH'] = os.path.abspath('credentials.json')
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET', 'dev-secret')
+
+# Spreadsheet key must be provided via env SHEET_KEY or edit below
+SPREADSHEET_KEY = os.environ.get('SHEET_KEY', None)
+
+
+def gsheet_client():
+    creds = os.environ.get('GOOGLE_CREDS_PATH', 'credentials.json')
+    return GSheetClient(spreadsheet_key=SPREADSHEET_KEY, creds_path=creds)
+
+
+def get_catalogue():
+    gs = gsheet_client()
+    df = gs.get_stock_df()
+    # Keep original wide format: Team | Kit | S | M | L | XL | XXL | Total | Price
+    return df
+
+
+@app.route('/')
+def dashboard():
+    gs = gsheet_client()
+    sales = gs.get_sales_df()
+    stock = gs.get_stock_df()
+    # Basic metrics
+    total_revenue = 0.0
+    total_sales = 0
+    top_item = None
+    top_buyer = None
+    if not sales.empty:
+        # ensure numeric
+        sales['Total'] = pd.to_numeric(sales.get('Total', 0), errors='coerce').fillna(0)
+        total_revenue = float(sales['Total'].sum())
+        total_sales = len(sales)
+        grouped = sales.groupby(['Team', 'Kit'])['Quantity'].sum().reset_index()
+        if not grouped.empty:
+            best = grouped.sort_values('Quantity', ascending=False).iloc[0]
+            top_item = f"{best['Team']} - {best['Kit']}"
+        buyers = sales.groupby('Buyer Name').size().sort_values(ascending=False)
+        if not buyers.empty:
+            top_buyer = buyers.index[0]
+
+    # low stock: any size column <=2
+    low_stock = []
+    size_cols = [c for c in stock.columns if c.strip() in ['S', 'M', 'L', 'XL', 'XXL']]
+    for _, r in stock.iterrows():
+        for c in size_cols:
+            try:
+                val = int(r.get(c) or 0)
+            except Exception:
+                val = 0
+            if val <= 2:
+                low_stock.append({'Team': r.get('Team'), 'Kit': r.get('Kit'), 'Size': c, 'Qty': val})
+
+    # sample chart: revenue per team
+    revenue_chart_html = ''
+    try:
+        if not sales.empty:
+            grp = (
+                sales.groupby('Team', group_keys=False)['Total']
+                .apply(lambda x: pd.to_numeric(x, errors='coerce').fillna(0).sum())
+                .reset_index(name='Revenue')
+            )
+            fig = px.bar(grp, x='Team', y='Revenue', title='Revenue by Team')
+            revenue_chart_html = fig.to_html(full_html=False)
+    except Exception:
+        revenue_chart_html = ''
+
+    return render_template('dashboard.html', total_revenue=total_revenue, total_sales=total_sales,
+                           top_item=top_item, top_buyer=top_buyer, low_stock=low_stock,
+                           revenue_chart=revenue_chart_html)
+
+
+@app.route('/catalogue')
+def catalogue():
+    df = get_catalogue()
+    query = request.args.get('q', '').lower()
+    if query:
+        df = df[df.apply(lambda r: query in str(r.get('Team','')).lower() or query in str(r.get('Kit','')).lower(), axis=1)]
+    return render_template('catalogue.html', table=df.to_dict(orient='records'), columns=list(df.columns))
+
+
+@app.route('/record-sale', methods=['GET', 'POST'])
+def record_sale():
+    gs = gsheet_client()
+    stock = gs.get_stock_df()
+    size_cols = [c for c in stock.columns if c.strip() in ['S', 'M', 'L', 'XL', 'XXL']]
+
+    if request.method == 'POST':
+        # Expect arrays for multiple items
+        teams = request.form.getlist('team[]')
+        kits = request.form.getlist('kit[]')
+        sizes = request.form.getlist('size[]')
+        qtys = request.form.getlist('quantity[]')
+        sold_prices = request.form.getlist('sold_price[]')
+        buyer = request.form.get('buyer')
+        discount = request.form.get('discount') or 0
+        deal_type = request.form.get('deal_type') or ''
+
+        # validate lengths
+        items = []
+        for i in range(len(teams)):
+            try:
+                q = int(qtys[i])
+            except Exception:
+                q = 0
+            items.append({'team': teams[i], 'kit': kits[i], 'size': sizes[i], 'qty': q, 'sold_price': sold_prices[i]})
+
+        # validate stock
+        errors = []
+        for it in items:
+            row_idx, rec = gs.find_stock_row(it['team'], it['kit'])
+            if rec is None:
+                errors.append(f"Item not found: {it['team']} / {it['kit']}")
+                continue
+            avail = int(rec.get(it['size'], 0) or 0)
+            if it['qty'] > avail:
+                errors.append(f"Not enough stock for {it['team']} {it['kit']} size {it['size']}: available {avail}")
+
+        if errors:
+            for e in errors:
+                flash(e, 'danger')
+            return redirect(url_for('record_sale'))
+
+        total_order = 0.0
+        # perform updates
+        for it in items:
+            row_idx, rec = gs.find_stock_row(it['team'], it['kit'])
+            # decrement
+            old = int(rec.get(it['size'], 0) or 0)
+            new = old - it['qty']
+            # update the cell
+            gs.update_stock_cell(row_idx, it['size'], new)
+            # update Total column if exists
+            try:
+                total_old = int(rec.get('Total', 0) or 0)
+            except Exception:
+                total_old = 0
+            gs.update_stock_cell(row_idx, 'Total', total_old - it['qty'])
+
+            sold = float(it['sold_price'] or 0)
+            line_total = sold * it['qty'] - float(discount or 0)
+            total_order += line_total
+            sale_row = {
+                'Timestamp': datetime.utcnow().isoformat(),
+                'Team': it['team'],
+                'Kit': it['kit'],
+                'Size': it['size'],
+                'Quantity': it['qty'],
+                'Sold Price': it['sold_price'],
+                'Discount': discount,
+                'Deal Type': deal_type,
+                'Buyer Name': buyer,
+                'Total': line_total,
+            }
+            gs.add_sale(sale_row)
+            # update customer
+            gs.upsert_customer(buyer, add_count=it['qty'], add_spent=line_total)
+
+        flash(f'Sale recorded. Total: {total_order}', 'success')
+        return render_template('sale_confirmation.html', items=items, total=total_order, buyer=buyer)
+
+    # GET
+    teams = sorted(stock['Team'].dropna().unique().tolist())
+    kits = sorted(stock['Kit'].dropna().unique().tolist())
+    return render_template('record_sale.html', teams=teams, kits=kits, sizes=size_cols)
+
+
+@app.route('/customers')
+def customers():
+    gs = gsheet_client()
+    df = gs.get_customers_df()
+    return render_template('customers.html', customers=df.to_dict(orient='records'), columns=list(df.columns))
+
+
+@app.route('/export/<which>')
+def export_csv(which):
+    gs = gsheet_client()
+    if which == 'stock':
+        df = gs.get_stock_df()
+    elif which == 'sales':
+        df = gs.get_sales_df()
+    else:
+        return "Unknown export", 400
+
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    buf.seek(0)
+    return Response(buf.getvalue(), mimetype='text/csv', headers={
+        'Content-Disposition': f'attachment;filename={which}.csv'
+    })
+
+
+@app.route('/debug/sheet')
+def debug_sheet():
+    """Safe debug endpoint: shows masked SHEET_KEY and tests opening the spreadsheet.
+
+    Does NOT return credentials or any sensitive content. Useful to confirm the key is correct
+    and that the service account can access the spreadsheet.
+    """
+    key = SPREADSHEET_KEY or 'NOT SET'
+    masked = key
+    if key != 'NOT SET' and len(key) > 8:
+        masked = key[:4] + '...' + key[-4:]
+    try:
+        gs = gsheet_client()
+        # attempt to list worksheets
+        titles = [ws.title for ws in gs.sheet.worksheets()]
+        return {
+            'sheet_key': masked,
+            'status': 'ok',
+            'worksheets': titles,
+        }
+    except Exception as e:
+        return {
+            'sheet_key': masked,
+            'status': 'error',
+            'error': str(e)
+        }, 400
+
+
+if __name__ == '__main__':
+    app.run(debug=True, port=8080)

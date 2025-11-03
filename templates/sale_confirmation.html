@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Sale Confirmation</h1>
+  <p>Buyer: {{ buyer }}</p>
+  <table class="table">
+    <thead><tr><th>Team</th><th>Kit</th><th>Size</th><th>Qty</th><th>Sold Price</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+        <tr><td>{{ it.team }}</td><td>{{ it.kit }}</td><td>{{ it.size }}</td><td>{{ it.qty }}</td><td>{{ it.sold_price }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h4>Total: {{ total }}</h4>
+  <p><a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back to dashboard</a></p>
+{% endblock %}
