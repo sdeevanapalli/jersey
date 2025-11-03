@@ -8,3 +8,4 @@ altair
 numpy
 requests
 gunicorn
+python-dotenv
