@@ -4,11 +4,10 @@
   <form method="post">
     <div id="items">
       <div class="row mb-2 sale-line">
-        <div class="col-md-2"><select name="team[]" class="form-select">
-          {% for t in teams %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-        </select></div>
-        <div class="col-md-3"><select name="kit[]" class="form-select">
-          {% for k in kits %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+        <div class="col-md-5"><select name="combined[]" class="form-select">
+          {% for opt in combined_options %}
+            <option value="{{ opt.value }}">{{ opt.label }}</option>
+          {% endfor %}
         </select></div>
         <div class="col-md-1"><select name="size[]" class="form-select">
           {% for s in sizes %}<option value="{{ s }}">{{ s }}</option>{% endfor %}

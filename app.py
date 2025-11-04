@@ -108,9 +108,29 @@ def record_sale():
     size_cols = [c for c in stock.columns if c.strip() in ['S', 'M', 'L', 'XL', 'XXL']]
 
     if request.method == 'POST':
-        # Expect arrays for multiple items
-        teams = request.form.getlist('team[]')
-        kits = request.form.getlist('kit[]')
+        # Expect arrays for multiple items. Support a single combined select (combined[])
+        # where each option value is encoded as "Team|||Kit". Fall back to separate
+        # team[] and kit[] fields if present.
+        combined = request.form.getlist('combined[]')
+        if combined:
+            teams = []
+            kits = []
+            for c in combined:
+                if '|||' in c:
+                    t, k = c.split('|||', 1)
+                else:
+                    # fallback: try to split on first space (not ideal) or put whole into team
+                    parts = c.split(' - ', 1)
+                    if len(parts) == 2:
+                        t, k = parts[0], parts[1]
+                    else:
+                        t, k = c, ''
+                teams.append(t)
+                kits.append(k)
+        else:
+            # legacy form fields
+            teams = request.form.getlist('team[]')
+            kits = request.form.getlist('kit[]')
         sizes = request.form.getlist('size[]')
         qtys = request.form.getlist('quantity[]')
         sold_prices = request.form.getlist('sold_price[]')
@@ -182,9 +202,21 @@ def record_sale():
         return render_template('sale_confirmation.html', items=items, total=total_order, buyer=buyer)
 
     # GET
-    teams = sorted(stock['Team'].dropna().unique().tolist())
-    kits = sorted(stock['Kit'].dropna().unique().tolist())
-    return render_template('record_sale.html', teams=teams, kits=kits, sizes=size_cols)
+    # Build combined options from stock rows so the UI can show a single select
+    # with entries like "Team Kit" while the value encodes both parts as
+    # "Team|||Kit" for reliable server-side parsing.
+    combined_options = []
+    seen = set()
+    for _, r in stock.iterrows():
+        team = str(r.get('Team') or '')
+        kit = str(r.get('Kit') or '')
+        label = f"{team} {kit}".strip()
+        value = f"{team}|||{kit}"
+        if value not in seen:
+            seen.add(value)
+            combined_options.append({'value': value, 'label': label})
+
+    return render_template('record_sale.html', combined_options=combined_options, sizes=size_cols)
 
 
 @app.route('/customers')
