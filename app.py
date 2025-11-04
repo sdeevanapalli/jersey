@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify
 import os
 import io
 import pandas as pd
@@ -6,6 +6,8 @@ from datetime import datetime
 from gsheet import GSheetClient
 import plotly.express as px
 from dotenv import load_dotenv
+import logging
+import traceback
 
 load_dotenv()
 
@@ -21,6 +23,28 @@ if creds_json and not os.path.exists('credentials.json'):
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET', 'dev-secret')
+
+# Basic logging configuration - ensure logs go to stdout for Render
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+app.logger.setLevel(logging.INFO)
+
+
+# Lightweight health check used by the platform liveness probe. Should not
+# exercise external services.
+@app.route('/health')
+def health():
+    return 'ok', 200
+
+
+# Global exception handler: log full traceback so Render logs capture the root cause
+@app.errorhandler(Exception)
+def handle_exception(err):
+    # Log the exception and traceback to both logging and Flask logger
+    tb = traceback.format_exc()
+    logging.error('Unhandled exception: %s\n%s', err, tb)
+    app.logger.error('Unhandled exception: %s\n%s', err, tb)
+    # Return a generic 500 response; do not expose internals to clients
+    return 'Internal Server Error', 500
 
 # Spreadsheet key must be provided via env SHEET_KEY or edit below
 SPREADSHEET_KEY = os.environ.get('SHEET_KEY', None)
