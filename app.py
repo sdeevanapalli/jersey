@@ -49,6 +49,14 @@ def handle_exception(err):
 # Spreadsheet key must be provided via env SHEET_KEY or edit below
 SPREADSHEET_KEY = os.environ.get('SHEET_KEY', None)
 
+# Log basic startup info (mask sensitive values)
+sk = SPREADSHEET_KEY or os.environ.get('SHEET_KEY') or 'NOT SET'
+masked_sk = sk
+if sk != 'NOT SET' and len(str(sk)) > 8:
+    masked_sk = str(sk)[:4] + '...' + str(sk)[-4:]
+creds_path = os.environ.get('GOOGLE_CREDS_PATH', 'credentials.json')
+app.logger.info('Starting app; SHEET_KEY=%s, creds_path=%s', masked_sk, creds_path)
+
 
 def gsheet_client():
     creds = os.environ.get('GOOGLE_CREDS_PATH', 'credentials.json')
