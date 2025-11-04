@@ -84,7 +84,11 @@ def dashboard():
         # ensure numeric
         sales['Total'] = pd.to_numeric(sales.get('Total', 0), errors='coerce').fillna(0)
         total_revenue = float(sales['Total'].sum())
-        total_sales = len(sales)
+        # Prefer total items sold (sum of Quantity) if available, otherwise fall back to row count
+        if 'Quantity' in sales.columns:
+            total_sales = int(pd.to_numeric(sales['Quantity'], errors='coerce').fillna(0).sum())
+        else:
+            total_sales = len(sales)
         grouped = sales.groupby(['Team', 'Kit'])['Quantity'].sum().reset_index()
         if not grouped.empty:
             best = grouped.sort_values('Quantity', ascending=False).iloc[0]
