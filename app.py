@@ -91,6 +91,8 @@ def dashboard():
             total_sales = len(sales)
         grouped = sales.groupby(['Team', 'Kit'])['Quantity'].sum().reset_index()
         if not grouped.empty:
+            # Ensure Quantity is numeric (Google Sheets may store numbers as strings)
+            grouped['Quantity'] = pd.to_numeric(grouped['Quantity'], errors='coerce').fillna(0)
             best = grouped.sort_values('Quantity', ascending=False).iloc[0]
             top_item = f"{best['Team']} - {best['Kit']}"
         buyers = sales.groupby('Buyer Name').size().sort_values(ascending=False)
