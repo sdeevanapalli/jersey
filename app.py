@@ -106,7 +106,7 @@ def dashboard():
                 val = int(r.get(c) or 0)
             except Exception:
                 val = 0
-            if val <= 2:
+            if val <= 1:
                 low_stock.append({'Team': r.get('Team'), 'Kit': r.get('Kit'), 'Size': c, 'Qty': val})
 
     # sample chart: revenue per team
