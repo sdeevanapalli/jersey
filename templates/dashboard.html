@@ -9,7 +9,6 @@
       <div class="card mb-3"><div class="card-body"><h5>Top buyer</h5><p>{{ top_buyer or 'N/A' }}</p></div></div>
     </div>
     <div class="col-md-8">
-      <div class="card mb-3"><div class="card-body">{{ revenue_chart|safe }}</div></div>
       <div class="card"><div class="card-body"><h5>Low stock</h5>
         <ul>
           {% for it in low_stock %}
